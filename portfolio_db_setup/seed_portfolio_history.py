@@ -15,7 +15,10 @@ Usage:
 import argparse
 import logging
 import random
+import sys
 from decimal import ROUND_HALF_UP, Decimal
+
+import mysql.connector
 
 from create_database import setup_database
 from db import connect_database
@@ -244,13 +247,17 @@ def update_balance(connection, user_id, starting_balance, total_cash_flow):
 
 # --- Entry point -------------------------------------------------------------
 
-def main():
+def main() -> int:
     args = parse_args()
     rng = random.Random(args.seed)
 
     logging.info("Ensuring database/tables exist")
-    setup_database()
-    connection = connect_database()
+    try:
+        setup_database()
+        connection = connect_database()
+    except mysql.connector.Error as exc:
+        logging.error("Database setup/connection failed: %s", exc)
+        return 1
 
     try:
         user_id = seed_user(connection, args.name, args.email, STARTING_BALANCE)
@@ -284,9 +291,16 @@ def main():
             "Done. Portfolio %s is ready — benchmark '%s' is also seeded.",
             portfolio_id, args.benchmark,
         )
+    except mysql.connector.Error as exc:
+        logging.error("Database error while seeding portfolio history: %s", exc)
+        return 1
+    except Exception as exc:
+        logging.error("Unexpected error while seeding portfolio history: %s", exc)
+        return 1
     finally:
         connection.close()
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

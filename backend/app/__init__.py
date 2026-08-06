@@ -71,10 +71,13 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     """Build and configure the FastAPI application."""
+    configure_logging()
+
     app = FastAPI(
         title="Quantitative Portfolio Management System (QPMS) API",
         version="1.0.0",
         description="REST API for the Quantitative Portfolio Management System.",
+        lifespan=lifespan,
         lifespan=lifespan,
     )
 
@@ -87,8 +90,10 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Surface MySQL connection problems as a clear 503 response.
-    app.add_exception_handler(mysql.connector.Error, _db_error_handler)
+    # Centralized exception handling: domain errors, validation failures,
+    # MySQL outages and unexpected exceptions all return a consistent JSON
+    # envelope (see app/handlers.py).
+    register_exception_handlers(app)
 
     # Register routers here. Add new modules (alerts, factors, ...) below.
     # analytics is registered before portfolios so the static path

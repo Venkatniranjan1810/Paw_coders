@@ -6,6 +6,9 @@ Usage:
 """
 import argparse
 import logging
+import sys
+
+import mysql.connector
 
 from db import connect_database
 
@@ -43,10 +46,15 @@ def seed_user(connection, name, email, balance):
     cursor.close()
 
 
-def main():
+def main() -> int:
     """Entry point: ensure exactly one user exists."""
     args = parse_args()
-    connection = connect_database()
+    try:
+        connection = connect_database()
+    except mysql.connector.Error as exc:
+        logging.error("Could not connect to database: %s", exc)
+        return 1
+
     try:
         # Guard: only seed if the users table is empty (single-user system).
         cursor = connection.cursor()
@@ -61,9 +69,16 @@ def main():
 
         seed_user(connection, args.name, args.email, args.balance)
         logging.info("Done.")
+    except mysql.connector.Error as exc:
+        logging.error("Database error while seeding user: %s", exc)
+        return 1
+    except Exception as exc:
+        logging.error("Unexpected error while seeding user: %s", exc)
+        return 1
     finally:
         connection.close()
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

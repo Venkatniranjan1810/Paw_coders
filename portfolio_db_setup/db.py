@@ -13,9 +13,18 @@ def connect_database():
 
 
 def run_statements(connection, statements):
-    """Run SQL statements in one transaction."""
+    """Run SQL statements in one transaction.
+
+    On failure the transaction is rolled back and the exception re-raised.
+    The cursor is always closed, even when a statement fails.
+    """
     cursor = connection.cursor()
-    for statement in statements:
-        cursor.execute(statement)
-    connection.commit()
-    cursor.close()
+    try:
+        for statement in statements:
+            cursor.execute(statement)
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        cursor.close()

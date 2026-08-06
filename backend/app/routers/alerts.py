@@ -1,6 +1,7 @@
 """Alert API routes."""
 from typing import Annotated, Optional
 
+from app.exceptions import NotFoundError
 from app.models import alerts as alerts_model
 from app.models import user as user_model
 from app.schemas.alerts import (
@@ -9,17 +10,14 @@ from app.schemas.alerts import (
     ReadResult,
 )
 from app.services import alerts as alerts_service
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query
 
 router = APIRouter(prefix="/alerts", tags=["Alerts"])
 
 
 def _require_user(user_id: int) -> None:
     if user_model.get_user_by_id(user_id) is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"User {user_id} not found",
-        )
+        raise NotFoundError(f"User {user_id} not found")
 
 
 @router.get(
@@ -76,8 +74,5 @@ def mark_alert_read(alert_id: int):
     """
     if not alerts_model.mark_read(alert_id):
         if alerts_model.get_alert(alert_id) is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Alert {alert_id} not found",
-            )
+            raise NotFoundError(f"Alert {alert_id} not found")
     return {"alert_id": alert_id, "is_read": True}

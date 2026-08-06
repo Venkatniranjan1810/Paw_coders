@@ -1,10 +1,11 @@
 """Watchlist API routes."""
 from typing import Annotated, Optional
 
+from app.exceptions import InternalError, NotFoundError
 from app.models import stock as stock_model
 from app.models import watchlist as watchlist_model
 from app.schemas.watchlist import WatchlistAddRequest, WatchlistItem
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, status
 
 router = APIRouter(prefix="/watchlist", tags=["Watchlist"])
 
@@ -20,18 +21,12 @@ def add_watchlist_item(payload: WatchlistAddRequest):
     """Add a stock to the shared watchlist using its symbol."""
     stock = stock_model.get_stock_by_symbol(payload.symbol)
     if stock is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stock symbol '{payload.symbol}' not found",
-        )
+        raise NotFoundError(f"Stock symbol '{payload.symbol}' not found")
 
     watchlist_model.add_to_watchlist(stock["stock_id"])
     item = watchlist_model.get_watchlist_item(stock["stock_id"])
     if item is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to load the newly added watchlist item",
-        )
+        raise InternalError("Failed to load the newly added watchlist item")
     return item
 
 
@@ -45,18 +40,12 @@ def add_watchlist_stock_id(stock_id: int):
     """Add a stock to the shared watchlist using its stock ID."""
     stock = stock_model.get_stock_by_id(stock_id)
     if stock is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stock {stock_id} not found",
-        )
+        raise NotFoundError(f"Stock {stock_id} not found")
 
     watchlist_model.add_to_watchlist(stock_id)
     item = watchlist_model.get_watchlist_item(stock_id)
     if item is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to load the newly added watchlist item",
-        )
+        raise InternalError("Failed to load the newly added watchlist item")
     return item
 
 
@@ -68,8 +57,5 @@ def add_watchlist_stock_id(stock_id: int):
 def remove_watchlist_stock(stock_id: int):
     """Remove a stock from the shared watchlist."""
     if not watchlist_model.remove_from_watchlist(stock_id):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stock {stock_id} not found in watchlist",
-        )
+        raise NotFoundError(f"Stock {stock_id} not found in watchlist")
     return None

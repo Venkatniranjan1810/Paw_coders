@@ -3,6 +3,7 @@ from decimal import Decimal
 from typing import Annotated, Literal
 
 import pandas as pd
+from app.exceptions import NotFoundError
 from app.models import analytics as analytics_model
 from app.models import portfolio as portfolio_model
 from app.models import stock as stock_model
@@ -16,7 +17,7 @@ from app.schemas.analytics import (
 )
 from app.services import analytics as analytics_service
 from app.services import market_data
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query
 
 PERFORMER_METRICS = Literal["total_pnl_pct", "total_pnl", "unrealized_pnl_pct"]
 
@@ -45,10 +46,7 @@ def get_stock_pnl(stock_id: int):
     """Unrealized + realized P&L for a stock, aggregated over every holding."""
     stock = stock_model.get_stock_by_id(stock_id)
     if stock is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stock {stock_id} not found",
-        )
+        raise NotFoundError(f"Stock {stock_id} not found")
 
     holdings = _enrich_live(analytics_model.get_holdings_by_stock(stock_id))
     transactions = analytics_model.get_transactions_by_stock(stock_id)

@@ -1,11 +1,12 @@
 """Portfolios API routes."""
 from typing import Annotated
 
+from app.exceptions import BadRequestError
 from app.models import portfolio as portfolio_model
 from app.models import user as user_model
 from app.routers.utils import require_portfolio_exists
 from app.schemas.portfolio import Portfolio, PortfolioCreate
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query, status
 
 router = APIRouter(prefix="/portfolios", tags=["Portfolios"])
 
@@ -25,10 +26,7 @@ def list_portfolios(user_id: Annotated[int, Query(alias="userId")]):
 def create_portfolio(payload: PortfolioCreate):
     """Create a new portfolio for an existing user."""
     if user_model.get_user_by_id(payload.user_id) is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"User {payload.user_id} not found",
-        )
+        raise BadRequestError(f"User {payload.user_id} not found")
     return portfolio_model.create_portfolio(payload.user_id, payload.name)
 
 

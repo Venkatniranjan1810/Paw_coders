@@ -1,7 +1,10 @@
 import argparse
 import logging
 import random
+import sys
 from datetime import datetime, timedelta
+
+import mysql.connector
 
 from create_database import setup_database
 from db import connect_database
@@ -116,8 +119,21 @@ def seed_mock_data(symbols, period, interval):
         logging.info("Database connection closed")
 
 
-if __name__ == "__main__":
+def main() -> int:
+    """Seed mock data, exiting non-zero if the setup/connection fails."""
     args = parse_args()
     logging.info("Seeding mock data for symbols: %s", ", ".join(args.symbols))
-    seed_mock_data(args.symbols, args.period, args.interval)
+    try:
+        seed_mock_data(args.symbols, args.period, args.interval)
+    except mysql.connector.Error as exc:
+        logging.error("Database error during seeding: %s", exc)
+        return 1
+    except Exception as exc:
+        logging.error("Unexpected error during seeding: %s", exc)
+        return 1
     logging.info("Seeding completed successfully")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

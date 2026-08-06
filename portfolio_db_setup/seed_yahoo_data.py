@@ -1,5 +1,8 @@
 import argparse
 import logging
+import sys
+
+import mysql.connector
 
 from create_database import setup_database
 from db import connect_database
@@ -42,8 +45,21 @@ def seed_yahoo_data(symbols, period, interval, batch_size=3):
         logging.info("Database connection closed")
 
 
-if __name__ == "__main__":
+def main() -> int:
+    """Seed Yahoo Finance data, exiting non-zero if the setup/connection fails."""
     args = parse_args()
     logging.info("Seeding data for symbols: %s", ", ".join(args.symbols))
-    seed_yahoo_data(args.symbols, args.period, args.interval)
+    try:
+        seed_yahoo_data(args.symbols, args.period, args.interval)
+    except mysql.connector.Error as exc:
+        logging.error("Database error during seeding: %s", exc)
+        return 1
+    except Exception as exc:
+        logging.error("Unexpected error during seeding: %s", exc)
+        return 1
     logging.info("Seeding completed successfully")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -114,6 +114,29 @@ TABLE_SQL = [
         FOREIGN KEY (user_id) REFERENCES users(user_id)
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS auto_trade_conditions (
+        condition_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        portfolio_id BIGINT NOT NULL,
+        stock_id BIGINT NOT NULL,
+        user_id BIGINT NOT NULL,
+        action VARCHAR(10) NOT NULL,
+        operator VARCHAR(5) NOT NULL,
+        threshold_price NUMERIC(18,6) NOT NULL,
+        quantity NUMERIC(18,6) NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'active',
+        last_checked_at TIMESTAMP NULL,
+        last_error TEXT,
+        triggered_at TIMESTAMP NULL,
+        trans_id BIGINT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (portfolio_id) REFERENCES portfolios(portfolio_id),
+        FOREIGN KEY (stock_id) REFERENCES stocks(stock_id),
+        FOREIGN KEY (user_id) REFERENCES users(user_id),
+        FOREIGN KEY (trans_id) REFERENCES transactions(trans_id)
+    )
+    """,
 ]
 
 INDEX_SQL = [
@@ -122,6 +145,7 @@ INDEX_SQL = [
     "CREATE INDEX idx_holdings_stock ON holdings (stock_id)",
     "CREATE INDEX idx_stocks_symbol ON stocks (symbol)",
     "CREATE INDEX idx_alerts_user_ts ON alerts (user_id, created_at DESC)",
+    "CREATE INDEX idx_autotrade_status_stock ON auto_trade_conditions (status, stock_id)",
 ]
 
 ALTER_TABLE_SQL = [

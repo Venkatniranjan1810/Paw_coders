@@ -11,8 +11,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import asynccontextmanager
 from datetime import date, datetime, time, timezone
 
+from decimal import Decimal
+
 from app.config import settings
 from app.models import stock as stock_model
+from app.services import auto_trade as auto_trade_service
 from app.services.market_data import fetch_live_quote
 from fastapi import FastAPI
 
@@ -55,6 +58,12 @@ def refresh_all_prices() -> dict:
             for stock_id, quote in quotes.items()
         ]
         stock_model.upsert_live_prices(rows)
+
+        try:
+            prices = {stock_id: Decimal(str(quote["close"])) for stock_id, quote in quotes.items()}
+            auto_trade_service.run_auto_trade_check_for_all_active(prices)
+        except Exception:
+            logging.exception("Auto-trade condition check failed after price refresh")
 
         return {
             "status": "ok",

@@ -2,6 +2,7 @@
 from datetime import date, datetime, timezone
 from typing import Annotated, Optional
 
+from app.exceptions import BadRequestError, NotFoundError
 from app.models import stock as stock_model
 from app.routers.utils import require_stock_exists
 from app.schemas.stock import (
@@ -12,7 +13,7 @@ from app.schemas.stock import (
     StockSummary,
 )
 from app.services import market_data
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query
 
 router = APIRouter(prefix="/stocks", tags=["Stocks"])
 
@@ -48,24 +49,15 @@ def compare_stock_prices(
     """Return OHLC candles for two stocks so the UI can plot them together."""
     first_stock = stock_model.get_stock_by_id(stock_id_a)
     if first_stock is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stock {stock_id_a} not found",
-        )
+        raise NotFoundError(f"Stock {stock_id_a} not found")
 
     second_stock = stock_model.get_stock_by_id(stock_id_b)
     if second_stock is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stock {stock_id_b} not found",
-        )
+        raise NotFoundError(f"Stock {stock_id_b} not found")
 
     selected_range = (range_name or "").strip().lower()
     if selected_range == "custom" and (start_date is None or end_date is None):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Custom ranges require both startDate and endDate",
-        )
+        raise BadRequestError("Custom ranges require both startDate and endDate")
 
     if start is None and end is None:
         if start_date is None and end_date is None and selected_range not in {None, "", "all", "custom"}:
@@ -77,10 +69,7 @@ def compare_stock_prices(
             end = datetime.combine(end_date, datetime.max.time())
 
     if start is not None and end is not None and start > end:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="start must be on or before end",
-        )
+        raise BadRequestError("start must be on or before end")
 
     first_candles = stock_model.get_stock_prices(
         stock_id_a,
@@ -178,10 +167,7 @@ def get_stock_prices(
     """Return candles aggregated to the requested chart interval and time frame."""
     selected_range = (range_name or "").strip().lower()
     if selected_range == "custom" and (start_date is None or end_date is None):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Custom ranges require both startDate and endDate",
-        )
+        raise BadRequestError("Custom ranges require both startDate and endDate")
 
     if start is None and end is None:
         if start_date is None and end_date is None and selected_range not in {None, "", "all", "custom"}:
@@ -193,10 +179,7 @@ def get_stock_prices(
             end = datetime.combine(end_date, datetime.max.time())
 
     if start is not None and end is not None and start > end:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="start must be on or before end",
-        )
+        raise BadRequestError("start must be on or before end")
 
     return stock_model.get_stock_prices(
         stock_id,
@@ -214,10 +197,7 @@ def get_stock_quote(stock_id: int):
     """Return the current live price, falling back to the last DB close."""
     row = stock_model.get_latest_quote(stock_id)
     if row is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No price data for stock {stock_id}",
-        )
+        raise NotFoundError(f"No price data for stock {stock_id}")
 
     live = market_data.get_live_price(row["symbol"])
     if live is not None:

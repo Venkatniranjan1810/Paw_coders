@@ -3,6 +3,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Annotated, Optional
 
+from app.exceptions import BadRequestError
 from app.models import portfolio as portfolio_model
 from app.models import transaction as transaction_model
 from app.routers.utils import require_portfolio_exists
@@ -48,19 +49,13 @@ def list_transactions_in_range(
 
     selected_interval = interval or range_name or "last_month"
     if selected_interval == "custom" and (start_date is None or end_date is None):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Custom ranges require both startDate and endDate",
-        )
+        raise BadRequestError("Custom ranges require both startDate and endDate")
 
     if start_date is None and end_date is None:
         start_date, end_date = transaction_model.resolve_time_range(selected_interval)
 
     if start_date is not None and end_date is not None and start_date > end_date:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="startDate must be on or before endDate",
-        )
+        raise BadRequestError("startDate must be on or before endDate")
 
     type_value = trans_type.value if trans_type is not None else None
     transactions = transaction_model.get_transactions_in_period(
@@ -103,19 +98,13 @@ def download_transactions_report(
 
     selected_interval = interval or range_name or "last_month"
     if selected_interval == "custom" and (start_date is None or end_date is None):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Custom ranges require both startDate and endDate",
-        )
+        raise BadRequestError("Custom ranges require both startDate and endDate")
 
     if start_date is None and end_date is None:
         start_date, end_date = transaction_model.resolve_time_range(selected_interval)
 
     if start_date is not None and end_date is not None and start_date > end_date:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="startDate must be on or before endDate",
-        )
+        raise BadRequestError("startDate must be on or before endDate")
 
     type_value = trans_type.value if trans_type is not None else None
     transactions = transaction_model.get_transactions_in_period(

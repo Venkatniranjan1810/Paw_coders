@@ -8,6 +8,7 @@ from app.handlers import configure_logging, register_exception_handlers
 from app.routers import (
     alerts,
     analytics,
+    auto_trade,
     holdings,
     portfolios,
     stocks,
@@ -95,6 +96,7 @@ def create_app() -> FastAPI:
     app.include_router(transactions.router, prefix=API_PREFIX)
     app.include_router(watchlist.router, prefix=API_PREFIX)
     app.include_router(alerts.router, prefix=API_PREFIX)
+    app.include_router(auto_trade.router, prefix=API_PREFIX)
 
     @app.get("/health", tags=["Meta"])
     def health() -> dict:

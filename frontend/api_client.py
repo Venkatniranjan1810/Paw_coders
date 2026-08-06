@@ -325,3 +325,25 @@ class ApiClient:
 
     def remove_from_watchlist(self, stock_id: int) -> None:
         self._request("DELETE", f"/api/v1/watchlist/{stock_id}")
+
+    # --- Alerts ------------------------------------------------------------
+
+    def list_alerts(
+        self,
+        user_id: int,
+        portfolio_id: Optional[int] = None,
+        unread_only: bool = False,
+        limit: int = 200,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"userId": user_id, "unreadOnly": unread_only, "limit": limit}
+        if portfolio_id is not None:
+            params["portfolioId"] = portfolio_id
+        return self._request("GET", "/api/v1/alerts", params=params)
+
+    def run_alert_check(self, user_id: int, send_email: bool = False) -> dict[str, Any]:
+        return self._request(
+            "POST", "/api/v1/alerts/check", params={"userId": user_id, "sendEmail": send_email}
+        )
+
+    def mark_alert_read(self, alert_id: int) -> dict[str, Any]:
+        return self._request("POST", f"/api/v1/alerts/{alert_id}/read")

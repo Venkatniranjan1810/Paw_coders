@@ -92,13 +92,6 @@ def chart_svg() -> str:
         '<circle cx="462" cy="214" r="15" fill="url(#coin)" opacity="0.9"/>'
         '<text x="462" y="221" font-family="Arial, sans-serif" font-size="16" font-weight="800" '
         'fill="#92400e" text-anchor="middle">$</text>'
-        '<g>'
-        '<rect x="350" y="26" width="150" height="38" rx="19" fill="rgba(16,185,129,0.9)"/>'
-        '<path d="M366 45 L378 33 L386 41 L396 29" fill="none" stroke="#ffffff" stroke-width="3" '
-        'stroke-linecap="round" stroke-linejoin="round"/>'
-        '<text x="402" y="50" font-family="Arial, sans-serif" font-size="18" font-weight="700" '
-        'fill="#ffffff">+18.4%</text>'
-        "</g>"
         "</svg>"
     )
     return _svg_uri(svg)
@@ -130,9 +123,9 @@ def spark_svg(width: int = 110, height: int = 36, color: str = "#3987e5", accent
     return _svg_uri(svg)
 
 
-def section_chip(emoji: str) -> str:
-    """Gradient chip placed before a section heading."""
-    return f'<span class="section-chip">{emoji}</span>'
+def section_chip() -> str:
+    """Subtle gradient accent tile placed before a section heading."""
+    return '<span class="section-chip"></span>'
 
 
 def hero_html(title: str, subtitle: str) -> str:
@@ -143,7 +136,7 @@ def hero_html(title: str, subtitle: str) -> str:
         '<div class="hero-glow hero-glow-a"></div>'
         '<div class="hero-glow hero-glow-b"></div>'
         '<div class="hero-text">'
-        '<div class="hero-eyebrow">🐾 Paw Coders · Live Quant Suite</div>'
+        '<div class="hero-eyebrow">Paw Coders · Quant Portfolio Suite</div>'
         f"<h1 class=\"hero-title\">{title}</h1>"
         f'<p class="hero-sub">{subtitle}</p>'
         "</div>"

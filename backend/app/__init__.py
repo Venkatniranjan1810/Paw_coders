@@ -1,16 +1,29 @@
 """Application factory and router registration."""
 import asyncio
 import logging
+from contextlib import asynccontextmanager
+
 import mysql.connector
-from app.routers import analytics, holdings, portfolios, stocks, transactions, users, watchlist
-from app.services.price_refresh import lifespan_refresh
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from app.services.price_refresh import lifespan_refresh
-from fastapi import FastAPI, Request
+
+from app.config import settings
+from app.routers import (
+    alerts,
+    analytics,
+    holdings,
+    portfolios,
+    stocks,
+    transactions,
+    users,
+    watchlist,
+)
+from app.services.alerts import run_alert_check_for_all_users
+from app.services.price_refresh import refresh_all_prices
 
 API_PREFIX = "/api/v1"
+
 
 def _db_error_handler(_request: Request, exc: mysql.connector.Error) -> JSONResponse:
     """Return a clear 503 instead of a bare 500 when MySQL is unreachable."""
@@ -18,7 +31,8 @@ def _db_error_handler(_request: Request, exc: mysql.connector.Error) -> JSONResp
         status_code=503,
         content={"detail": f"Database connection failed: {exc.msg}"},
     )
-    
+
+
 async def _run_periodic_refresh() -> None:
     """Background loop refreshing stock_prices every PRICE_REFRESH_INTERVAL_SECONDS."""
     while True:
@@ -61,7 +75,7 @@ def create_app() -> FastAPI:
         title="Quantitative Portfolio Management System (QPMS) API",
         version="1.0.0",
         description="REST API for the Quantitative Portfolio Management System.",
-        lifespan=lifespan_refresh,
+        lifespan=lifespan,
     )
 
     # CORS — allow the Streamlit frontend to call the API.
@@ -76,7 +90,7 @@ def create_app() -> FastAPI:
     # Surface MySQL connection problems as a clear 503 response.
     app.add_exception_handler(mysql.connector.Error, _db_error_handler)
 
-    # Register routers here. Add new modules (analytics, factors, ...) below.
+    # Register routers here. Add new modules (alerts, factors, ...) below.
     # analytics is registered before portfolios so the static path
     # /portfolios/performers is matched before /portfolios/{portfolio_id}.
     app.include_router(users.router, prefix=API_PREFIX)
@@ -86,6 +100,7 @@ def create_app() -> FastAPI:
     app.include_router(holdings.router, prefix=API_PREFIX)
     app.include_router(transactions.router, prefix=API_PREFIX)
     app.include_router(watchlist.router, prefix=API_PREFIX)
+    app.include_router(alerts.router, prefix=API_PREFIX)
 
     @app.get("/health", tags=["Meta"])
     def health() -> dict:

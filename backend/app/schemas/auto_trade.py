@@ -82,6 +82,15 @@ class AutoTradeConditionListResponse(BaseModel):
     conditions: list[AutoTradeCondition]
 
 
+class AutoTradeHoldingRulePayload(BaseModel):
+    """Create or replace a holding's stop-loss / take-profit auto-trade rules."""
+
+    stock_id: int
+    stop_loss_percent: Optional[Decimal] = None
+    take_profit_percent: Optional[Decimal] = None
+    quantity: Optional[Decimal] = None
+
+
 class AutoTradeCheckResult(BaseModel):
     """Outcome of running an auto-trade check."""
 

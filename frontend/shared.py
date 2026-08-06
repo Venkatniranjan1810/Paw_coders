@@ -413,6 +413,27 @@ def _render_order_confirmation(client) -> None:
         f"- **Estimated total:** {utils.format_currency(total)}"
     )
 
+    buy_auto_trade_stop_loss_pct = 0.0
+    buy_auto_trade_take_profit_pct = 0.0
+    if kind == "buy":
+        with st.expander("Auto-trade rules (optional)", expanded=False):
+            buy_auto_trade_stop_loss_pct = st.number_input(
+                "Stop-loss %",
+                min_value=0.0,
+                max_value=100.0,
+                value=0.0,
+                step=0.25,
+                format="%.2f",
+            )
+            buy_auto_trade_take_profit_pct = st.number_input(
+                "Take-profit %",
+                min_value=0.0,
+                max_value=100.0,
+                value=0.0,
+                step=0.25,
+                format="%.2f",
+            )
+
     col_confirm, col_cancel = st.columns(2)
     with col_confirm:
         confirm = st.button("Confirm", type="primary", width="stretch")
@@ -427,6 +448,14 @@ def _render_order_confirmation(client) -> None:
         try:
             if kind == "buy":
                 client.buy_stock(portfolio_id, symbol, quantity, price)
+                if buy_auto_trade_stop_loss_pct > 0 or buy_auto_trade_take_profit_pct > 0:
+                    client.upsert_auto_trade_rules(
+                        portfolio_id,
+                        stock_id,
+                        stop_loss_percent=buy_auto_trade_stop_loss_pct or None,
+                        take_profit_percent=buy_auto_trade_take_profit_pct or None,
+                        quantity=quantity,
+                    )
                 message = f"Purchased {quantity} share(s) of {symbol} at {utils.format_currency(price)}"
                 basket = list(st.session_state.get("trade_basket", []))
                 if symbol in basket:

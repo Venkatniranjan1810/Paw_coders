@@ -107,6 +107,12 @@ def list_active_conditions_for_stock(stock_id: int) -> list[dict[str, Any]]:
     return fetch_all(_SELECT_ACTIVE_CONDITIONS_FOR_STOCK, (stock_id,))
 
 
+def list_active_conditions_for_portfolio_stock(portfolio_id: int, stock_id: int) -> list[dict[str, Any]]:
+    """Return all currently-active conditions for a portfolio/stock pair."""
+    query = _SELECT_CONDITION_BASE + " WHERE c.portfolio_id = %s AND c.stock_id = %s AND c.status = 'active'"
+    return fetch_all(query, (portfolio_id, stock_id))
+
+
 def list_distinct_active_stock_ids() -> list[int]:
     """Return the stock_ids that have at least one active condition."""
     rows = fetch_all(_SELECT_DISTINCT_ACTIVE_STOCK_IDS)

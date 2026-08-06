@@ -147,6 +147,150 @@ def render(ctx) -> None:
                         st.session_state.trade_basket = basket
                         st.rerun()
 
+    auto_trade_rules = {}
+    try:
+        auto_trade_payload = client.list_auto_trade_conditions(selected_portfolio_id)
+        conditions = auto_trade_payload.get("conditions", []) if isinstance(auto_trade_payload, dict) else []
+    except APIError:
+        conditions = []
+
+    for condition in conditions:
+        if condition.get("action") != "SELL":
+            continue
+        stock_id = int(condition.get("stock_id"))
+        matching_row = holdings_df[holdings_df["stock_id"] == stock_id]
+        entry_price = float(matching_row.iloc[0]["avg_buy_price"]) if not matching_row.empty else None
+        if not entry_price or entry_price <= 0:
+            continue
+        threshold = float(condition.get("threshold_price") or 0)
+        if condition.get("operator") == "<=":
+            pct = max(0.0, (entry_price - threshold) / entry_price * 100) if threshold > 0 else 0.0
+            auto_trade_rules.setdefault(stock_id, {})["stop_loss_pct"] = pct
+        elif condition.get("operator") == ">=":
+            pct = max(0.0, (threshold - entry_price) / entry_price * 100) if threshold > 0 else 0.0
+            auto_trade_rules.setdefault(stock_id, {})["take_profit_pct"] = pct
+
+    def _render_auto_trade_manager() -> None:
+        if holdings_df.empty:
+            st.info("No holdings available yet — buy a position to enable auto-trade rules.")
+            return
+
+        edited_stock_id = st.session_state.get("auto_trade_selected_stock_id")
+
+        def _ensure_auto_trade_state(stock_id: int, rules: dict[str, float]) -> None:
+            stop_key = f"auto_stop_{stock_id}"
+            take_key = f"auto_take_{stock_id}"
+            if stop_key not in st.session_state:
+                st.session_state[stop_key] = float(rules.get("stop_loss_pct", 0.0))
+            if take_key not in st.session_state:
+                st.session_state[take_key] = float(rules.get("take_profit_pct", 0.0))
+
+        def _select_auto_trade(stock_id: int) -> None:
+            st.session_state["auto_trade_selected_stock_id"] = stock_id
+
+        def _clear_auto_trade(stock_id: int) -> None:
+            st.session_state[f"auto_stop_{stock_id}"] = 0.0
+            st.session_state[f"auto_take_{stock_id}"] = 0.0
+        st.caption(
+            "Configure stop-loss and take-profit targets at the position level, then save all rules together. "
+            "Use the Configure button to edit a holding in a compact view."
+        )
+
+        header_cols = st.columns([2, 1, 1, 1, 1])
+        header_cols[0].markdown("**Position**")
+        header_cols[1].markdown("**Qty**")
+        header_cols[2].markdown("**Stop-loss %**")
+        header_cols[3].markdown("**Take-profit %**")
+        header_cols[4].markdown("**Configure**")
+
+        for _, row in holdings_df.sort_values("symbol").iterrows():
+            stock_id = int(row["stock_id"])
+            symbol = row["symbol"]
+            rules = auto_trade_rules.get(stock_id, {})
+            _ensure_auto_trade_state(stock_id, rules)
+            cols = st.columns([2, 1, 1, 1, 1])
+            cols[0].markdown(f"**{symbol}**")
+            cols[1].markdown(f"{int(float(row['quantity']))}")
+            cols[2].markdown(f"{float(rules.get('stop_loss_pct', 0.0)):.2f}%")
+            cols[3].markdown(f"{float(rules.get('take_profit_pct', 0.0)):.2f}%")
+            cols[4].button(
+                "Configure",
+                key=f"edit_auto_{stock_id}",
+                use_container_width=True,
+                on_click=_select_auto_trade,
+                args=(stock_id,),
+            )
+
+        if edited_stock_id is not None and int(edited_stock_id) in holdings_df["stock_id"].tolist():
+            selected_row = holdings_df[holdings_df["stock_id"] == int(edited_stock_id)].iloc[0]
+            symbol = selected_row["symbol"]
+            stock_id = int(selected_row["stock_id"])
+            rules = auto_trade_rules.get(stock_id, {})
+            stop_key = f"auto_stop_{stock_id}"
+            take_key = f"auto_take_{stock_id}"
+            if stop_key not in st.session_state:
+                st.session_state[stop_key] = float(rules.get("stop_loss_pct", 0.0))
+            if take_key not in st.session_state:
+                st.session_state[take_key] = float(rules.get("take_profit_pct", 0.0))
+
+            with st.expander(f"Configure {symbol}", expanded=True):
+                st.markdown(
+                    "Edit the stop-loss and take-profit targets for this position, then use the "
+                    "Save auto-trade rules for all holdings button below."
+                )
+                st.number_input(
+                    "Stop-loss %",
+                    min_value=0.0,
+                    max_value=100.0,
+                    step=0.25,
+                    format="%.2f",
+                    key=stop_key,
+                )
+                st.number_input(
+                    "Take-profit %",
+                    min_value=0.0,
+                    max_value=100.0,
+                    step=0.25,
+                    format="%.2f",
+                    key=take_key,
+                )
+                st.button(
+                    "Clear this holding's targets",
+                    key=f"clear_auto_{stock_id}",
+                    on_click=_clear_auto_trade,
+                    args=(stock_id,),
+                )
+
+        if st.button("Save auto-trade rules for all holdings", type="primary", use_container_width=True):
+            try:
+                saved_any = False
+                for _, row in holdings_df.iterrows():
+                    stock_id = int(row["stock_id"])
+                    stop_key = f"auto_stop_{stock_id}"
+                    take_key = f"auto_take_{stock_id}"
+                    quantity = int(float(row["quantity"]))
+                    stop_loss_pct = st.session_state.get(stop_key, 0.0)
+                    take_profit_pct = st.session_state.get(take_key, 0.0)
+                    client.upsert_auto_trade_rules(
+                        selected_portfolio_id,
+                        stock_id,
+                        stop_loss_percent=stop_loss_pct or None,
+                        take_profit_percent=take_profit_pct or None,
+                        quantity=quantity,
+                    )
+                    saved_any = True
+                if saved_any:
+                    st.success("Saved auto-trade rules for all holdings.")
+                    st.session_state["auto_trade_selected_stock_id"] = None
+                else:
+                    st.info("No auto-trade state was available to save.")
+                st.rerun()
+            except APIError as exc:
+                st.error(f"Could not save auto-trade rules: {exc}")
+
+    with st.expander("Auto-trade for your holdings", expanded=False):
+        _render_auto_trade_manager()
+
     mode = st.session_state.get("trade_mode", "buy")
     buy_col, sell_col = st.columns(2)
     with buy_col:

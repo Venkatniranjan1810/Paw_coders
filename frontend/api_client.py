@@ -128,6 +128,32 @@ class ApiClient:
             "DELETE", f"/api/v1/portfolios/{portfolio_id}/holdings/{stock_id}", params=params
         )
 
+    # --- Auto trade ------------------------------------------------------
+
+    def list_auto_trade_conditions(self, portfolio_id: int) -> dict[str, Any]:
+        return self._request("GET", f"/api/v1/portfolios/{portfolio_id}/auto-trade-conditions")
+
+    def upsert_auto_trade_rules(
+        self,
+        portfolio_id: int,
+        stock_id: int,
+        stop_loss_percent: Optional[float] = None,
+        take_profit_percent: Optional[float] = None,
+        quantity: Optional[int] = None,
+    ) -> list[dict[str, Any]]:
+        payload: dict[str, Any] = {"stock_id": stock_id}
+        if stop_loss_percent is not None:
+            payload["stop_loss_percent"] = stop_loss_percent
+        if take_profit_percent is not None:
+            payload["take_profit_percent"] = take_profit_percent
+        if quantity is not None:
+            payload["quantity"] = quantity
+        return self._request(
+            "POST",
+            f"/api/v1/portfolios/{portfolio_id}/auto-trade-conditions/holding-rules",
+            json=payload,
+        )
+
     # --- Stocks -------------------------------------------------------
 
     def list_stocks(

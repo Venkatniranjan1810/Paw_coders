@@ -15,6 +15,8 @@ from app.models import auto_trade as auto_trade_model
 from app.models import holding as holding_model
 from app.models import stock as stock_model
 from app.models import transaction as transaction_model
+from app.models import user as user_model
+from app.services import alerts as alerts_service
 
 _OPERATORS = {
     "<": lambda observed, threshold: observed < threshold,
@@ -33,6 +35,19 @@ def condition_met(operator: str, observed_price: Decimal, threshold: Decimal) ->
     return comparator(Decimal(observed_price), Decimal(threshold))
 
 
+def calculate_rule_target_price(entry_price: Decimal, rule_type: str, percent: Decimal) -> Decimal:
+    """Convert a stop-loss or take-profit percentage into a sell threshold price."""
+    normalized_type = str(rule_type or "").strip().lower().replace("-", "_")
+    pct = Decimal(percent or 0)
+    if pct < 0:
+        raise ValueError("Percent must be non-negative")
+    if normalized_type == "stop_loss":
+        return entry_price * (Decimal("1") - pct / Decimal("100"))
+    if normalized_type == "take_profit":
+        return entry_price * (Decimal("1") + pct / Decimal("100"))
+    raise ValueError(f"Unsupported rule type: {rule_type}")
+
+
 def _alert_for(condition: dict[str, Any], observed_price: Decimal, message: str, severity: str) -> dict[str, Any]:
     return {
         "portfolio_id": condition["portfolio_id"],
@@ -44,6 +59,20 @@ def _alert_for(condition: dict[str, Any], observed_price: Decimal, message: str,
         "threshold": condition["threshold_price"],
         "message": message,
     }
+
+
+def _send_auto_trade_alert(condition: dict[str, Any], alert: dict[str, Any]) -> None:
+    """Send an email for the auto-trade alert when SMTP is configured."""
+    user = user_model.get_user_by_id(condition["user_id"])
+    if user is None:
+        return
+    to_email = str(user.get("email") or "").strip()
+    if not to_email:
+        return
+    try:
+        alerts_service.send_alert_email(to_email, [alert])
+    except Exception:
+        pass
 
 
 def execute_condition(condition: dict[str, Any], observed_price: Decimal) -> dict[str, Any]:
@@ -79,9 +108,9 @@ def execute_condition(condition: dict[str, Any], observed_price: Decimal) -> dic
     auto_trade_model.mark_triggered(condition["condition_id"], trans_id)
 
     message = f"Auto-{condition['action']} of {quantity} {symbol} executed at ${observed_price}."
-    alert = alerts_model.get_alert(
-        alerts_model.insert_alert(_alert_for(condition, observed_price, message, "info"))
-    )
+    alert_id = alerts_model.insert_alert(_alert_for(condition, observed_price, message, "info"))
+    alert = alerts_model.get_alert(alert_id)
+    _send_auto_trade_alert(condition, alert)
     return {"condition_id": condition["condition_id"], "status": "triggered", "alert": alert}
 
 

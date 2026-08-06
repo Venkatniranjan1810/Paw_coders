@@ -314,7 +314,11 @@ def _dismiss_delete_dialog() -> None:
 def _render_delete_portfolio(portfolio_id: int, portfolio_name: str) -> None:
     """Body of the delete-portfolio confirmation: lists every holding with its
     live price, requires selling all positions before deletion is allowed."""
-    holdings = client.list_holdings(portfolio_id)
+    try:
+        holdings = client.list_holdings(portfolio_id)
+    except APIError as exc:
+        st.error(f"Could not load holdings: {exc}")
+        return
 
     if holdings:
         rows = []
@@ -399,7 +403,11 @@ def _stocks_live_table(search: Optional[str]) -> None:
     Auto-refreshes every minute (wrapped in st.fragment below) so the latest
     live price is shown next to each stock row.
     """
-    results = client.list_stocks(search=search or None, limit=100)
+    try:
+        results = client.list_stocks(search=search or None, limit=100)
+    except APIError as exc:
+        st.error(f"Could not load stocks: {exc}")
+        return
     df = pd.DataFrame(results)
     if df.empty:
         st.info("No matching stocks found.")
@@ -483,7 +491,11 @@ with st.sidebar:
 
     st.divider()
 
-    users = client.list_users()
+    try:
+        users = client.list_users()
+    except APIError as exc:
+        st.error(f"Could not load users: {exc}")
+        users = []
     preferred_user = None
     for user in users:
         raw_name = str(user.get("user_name") or "").strip()
@@ -508,7 +520,11 @@ with st.sidebar:
         st.info("No users found in the database yet.")
 
     if st.session_state.selected_user_id is not None:
-        portfolios = client.list_portfolios(int(st.session_state.selected_user_id))
+        try:
+            portfolios = client.list_portfolios(int(st.session_state.selected_user_id))
+        except APIError as exc:
+            st.error(f"Could not load portfolios: {exc}")
+            portfolios = []
         portfolio_ids = [p["portfolio_id"] for p in portfolios]
         portfolio_lookup = {p["portfolio_id"]: p for p in portfolios}
         if portfolio_ids:
@@ -554,9 +570,13 @@ if st.session_state.selected_portfolio_id is None:
 selected_user_id = int(st.session_state.selected_user_id)
 selected_portfolio_id = int(st.session_state.selected_portfolio_id)
 
-user = client.get_user(selected_user_id)
-portfolio = client.get_portfolio(selected_portfolio_id)
-holdings = client.list_holdings(selected_portfolio_id)
+try:
+    user = client.get_user(selected_user_id)
+    portfolio = client.get_portfolio(selected_portfolio_id)
+    holdings = client.list_holdings(selected_portfolio_id)
+except APIError as exc:
+    st.error(f"Could not load portfolio data: {exc}")
+    st.stop()
 metrics = utils.portfolio_metrics(holdings, float(user.get("acct_balance", 0) or 0))
 holdings_df = utils.holdings_dataframe(holdings)
 
@@ -642,6 +662,9 @@ with dashboard_tab:
         recent_tx = client.list_transactions(selected_portfolio_id, limit=10)
     except TypeError:
         recent_tx = client.list_transactions(selected_portfolio_id)
+    except APIError as exc:
+        st.error(f"Could not load recent transactions: {exc}")
+        recent_tx = []
     if recent_tx:
         tx_df = pd.DataFrame(recent_tx)
         tx_df["ts"] = pd.to_datetime(tx_df["ts"])
@@ -689,7 +712,11 @@ with trade_tab:
         st.session_state["buy_symbol_pending"] = basket_click_pending
 
     stock_search = st.text_input("Search stocks to trade (symbol or name)", key="trade_search")
-    stocks = client.list_stocks(search=stock_search or None, limit=200)
+    try:
+        stocks = client.list_stocks(search=stock_search or None, limit=200)
+    except APIError as exc:
+        st.error(f"Could not load stocks: {exc}")
+        stocks = []
     stock_lookup = {s["symbol"]: s for s in stocks}
     stock_symbols = sorted(stock_lookup.keys())
 
@@ -724,7 +751,12 @@ with trade_tab:
                 if "buy_symbol_pending" in st.session_state:
                     pending = st.session_state.pop("buy_symbol_pending")
                     if pending not in ordered_symbols:
-                        for candidate in client.list_stocks(search=pending, limit=5):
+                        try:
+                            candidates = client.list_stocks(search=pending, limit=5)
+                        except APIError as exc:
+                            st.error(f"Could not look up {pending}: {exc}")
+                            candidates = []
+                        for candidate in candidates:
                             if candidate.get("symbol") == pending:
                                 stock_lookup[pending] = candidate
                                 ordered_symbols.insert(0, pending)
@@ -824,7 +856,11 @@ with stocks_tab:
 
     stocks_live_prices_fragment(discover_search)
 
-    discover_results = client.list_stocks(search=discover_search or None, limit=100)
+    try:
+        discover_results = client.list_stocks(search=discover_search or None, limit=100)
+    except APIError as exc:
+        st.error(f"Could not load stocks: {exc}")
+        discover_results = []
     discover_df = pd.DataFrame(discover_results)
 
     if not discover_df.empty:
@@ -868,7 +904,11 @@ with stocks_tab:
                 else:
                     for sym in trade_selection:
                         if sym not in watchlist_symbols:
-                            client.add_to_watchlist(sym)
+                            try:
+                                client.add_to_watchlist(sym)
+                            except APIError as exc:
+                                st.error(f"Could not add {sym} to watchlist: {exc}")
+                                continue
                             watchlist_symbols.add(sym)
                     st.success(f"Added {', '.join(trade_selection)} to the watchlist.")
                     st.rerun()
@@ -892,11 +932,19 @@ with stocks_tab:
         if chosen_symbol in watchlist_symbols:
             st.caption(f"👀 {chosen_symbol} is already in your watchlist.")
         elif st.button(f"👀 Add {chosen_symbol} to Watchlist"):
-            client.add_to_watchlist(chosen_symbol)
-            st.success(f"Added {chosen_symbol} to the watchlist.")
-            st.rerun()
+            try:
+                client.add_to_watchlist(chosen_symbol)
+                watchlist_symbols.add(chosen_symbol)
+                st.success(f"Added {chosen_symbol} to the watchlist.")
+                st.rerun()
+            except APIError as exc:
+                st.error(f"Could not add {chosen_symbol} to watchlist: {exc}")
 
-        detail = client.get_stock(stock_id)
+        try:
+            detail = client.get_stock(stock_id)
+        except APIError as exc:
+            st.warning(f"Stock detail unavailable: {exc}")
+            detail = {}
         quote = client.get_stock_quote(stock_id)
 
         info_cols = st.columns(4)
@@ -919,7 +967,11 @@ with stocks_tab:
         price_params: dict[str, Any] = {"interval": "1d", "limit": 5000}
         if chart_days:
             price_params["start"] = (pd.Timestamp.now() - pd.Timedelta(days=chart_days)).strftime("%Y-%m-%d")
-        candles = client.get_stock_prices(stock_id, **price_params)
+        try:
+            candles = client.get_stock_prices(stock_id, **price_params)
+        except APIError as exc:
+            st.error(f"Could not load price history: {exc}")
+            candles = []
         if not candles:
             st.info(f"No price history for the selected period for {chosen_symbol}.")
         else:
@@ -1221,7 +1273,10 @@ with analytics_tab:
         for _, row in holdings_df.iterrows():
             symbol = row["symbol"]
             stock_id = int(row["stock_id"])
-            candles = client.get_stock_prices(stock_id, interval=interval, limit=5000)
+            try:
+                candles = client.get_stock_prices(stock_id, interval=interval, limit=5000)
+            except APIError:
+                candles = []
             series = price_series(candles)
             price_series_by_symbol[symbol] = series
             result = utils.analyze_prices(series, interval=interval)

@@ -65,6 +65,17 @@ def decode_and_write(rel_path, encoded, output_dir):
     safe_rel = rel_path.replace("\\", os.sep).replace("/", os.sep)
     full_path = os.path.join(output_dir, safe_rel)
 
+    # Guard against path traversal: the decoded file must stay inside output_dir.
+    output_root = os.path.realpath(output_dir)
+    target = os.path.realpath(full_path)
+    try:
+        inside = os.path.commonpath([output_root, target]) == output_root
+    except ValueError:
+        inside = False
+    if not inside:
+        print(f"  Skipped '{rel_path}': path escapes the output directory")
+        return False
+
     # Create parent directories as needed
     parent = os.path.dirname(full_path)
     if parent:
@@ -80,7 +91,7 @@ def decode_and_write(rel_path, encoded, output_dir):
         return False
 
 
-def main():
+def main() -> int:
     """Main function"""
     print("=" * 50)
     print("File Content Decoder (Base64)")
@@ -90,10 +101,14 @@ def main():
 
     if not os.path.isfile(input_path):
         print(f"Error: '{input_path}' is not a valid file")
-        return
+        return 1
 
-    with open(input_path, "r", encoding="utf-8") as f:
-        lines = f.readlines()
+    try:
+        with open(input_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+    except OSError as exc:
+        print(f"Error reading '{input_path}': {exc}")
+        return 2
 
     created = 0
     skipped = 0
@@ -119,7 +134,8 @@ def main():
 
     print("-" * 50)
     print(f"Done! {created} file(s) created, {skipped} skipped.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

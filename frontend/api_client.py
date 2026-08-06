@@ -24,6 +24,18 @@ class ApiClient:
     def close(self) -> None:
         self.client.close()
 
+    def __enter__(self) -> "ApiClient":
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
+
     def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         try:
             response = self.client.request(method, path, **kwargs)

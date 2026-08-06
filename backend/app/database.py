@@ -5,24 +5,35 @@ from typing import Any, Optional
 import mysql.connector
 import pandas as pd
 from app.config import settings
+from app.exceptions import DatabaseError
 from mysql.connector import pooling
 
 _pool: Optional[pooling.MySQLConnectionPool] = None
 
 
 def _get_pool() -> pooling.MySQLConnectionPool:
-    """Lazily create a single shared connection pool."""
+    """Lazily create a single shared connection pool.
+
+    Raises:
+        DatabaseError: if the pool cannot be created (e.g. MySQL is down or
+            credentials are wrong), wrapping the driver-level cause.
+    """
     global _pool
     if _pool is None:
-        _pool = pooling.MySQLConnectionPool(
-            pool_name="qpms_pool",
-            pool_size=5,
-            host=settings.DB_HOST,
-            port=settings.DB_PORT,
-            user=settings.DB_USER,
-            password=settings.DB_PASSWORD,
-            database=settings.DB_NAME,
-        )
+        try:
+            _pool = pooling.MySQLConnectionPool(
+                pool_name="qpms_pool",
+                pool_size=5,
+                host=settings.DB_HOST,
+                port=settings.DB_PORT,
+                user=settings.DB_USER,
+                password=settings.DB_PASSWORD,
+                database=settings.DB_NAME,
+            )
+        except mysql.connector.Error as exc:
+            raise DatabaseError(
+                f"Could not create the database connection pool: {exc}"
+            ) from exc
     return _pool
 
 
@@ -33,8 +44,14 @@ def get_cursor(dictionary: bool = True, commit: bool = False):
     Args:
         dictionary: return rows as dicts instead of tuples.
         commit: commit the transaction on successful exit.
+
+    Raises:
+        DatabaseError: if a pooled connection cannot be obtained.
     """
-    connection = _get_pool().get_connection()
+    try:
+        connection = _get_pool().get_connection()
+    except mysql.connector.Error as exc:
+        raise DatabaseError(f"Could not obtain a database connection: {exc}") from exc
     cursor = connection.cursor(dictionary=dictionary)
     try:
         yield cursor

@@ -2,13 +2,14 @@
 from decimal import Decimal
 from typing import Annotated, Optional
 
+from app.exceptions import BadRequestError, NotFoundError
 from app.models import holding as holding_model
 from app.models import stock as stock_model
 from app.routers.utils import require_portfolio_exists
 from app.schemas.holding import Holding, HoldingBuy
 from app.schemas.transaction import Transaction
 from app.services import market_data
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query, status
 
 router = APIRouter(prefix="/portfolios/{portfolio_id}/holdings", tags=["Holdings"])
 
@@ -51,24 +52,18 @@ def add_holding(portfolio_id: int, payload: HoldingBuy):
 
     stock = stock_model.get_stock_by_symbol(payload.symbol)
     if stock is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unknown stock symbol '{payload.symbol}'",
-        )
+        raise BadRequestError(f"Unknown stock symbol '{payload.symbol}'")
 
     price = payload.price or _latest_price(stock["stock_id"], stock["symbol"])
     if price is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No live price available for purchase",
-        )
+        raise BadRequestError("No live price available for purchase")
 
     try:
         return _enrich_live(holding_model.buy_stock(portfolio_id, stock["stock_id"], payload.quantity, price))
     except holding_model.InsufficientFundsError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise BadRequestError(str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise BadRequestError(str(exc)) from exc
 
 
 @router.delete(
@@ -90,14 +85,11 @@ def sell_holding(
         stock = stock_model.get_stock_by_id(stock_id)
         sell_price = _latest_price(stock_id, stock["symbol"] if stock else None)
     if sell_price is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No price provided and no live price available",
-        )
+        raise BadRequestError("No price provided and no live price available")
 
     try:
         return holding_model.sell_stock(portfolio_id, stock_id, sell_price, quantity)
     except holding_model.InsufficientQuantityError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise NotFoundError(str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise BadRequestError(str(exc)) from exc

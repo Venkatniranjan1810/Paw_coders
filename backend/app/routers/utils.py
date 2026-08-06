@@ -2,9 +2,9 @@
 from functools import wraps
 from inspect import signature
 
+from app.exceptions import NotFoundError
 from app.models import portfolio as portfolio_model
 from app.models import stock as stock_model
-from fastapi import HTTPException, status
 
 
 def require_portfolio_exists(func):
@@ -16,10 +16,7 @@ def require_portfolio_exists(func):
         )
         if portfolio_id is not None:
             if portfolio_model.get_portfolio_by_id(portfolio_id) is None:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Portfolio {portfolio_id} not found",
-                )
+                raise NotFoundError(f"Portfolio {portfolio_id} not found")
         return func(*args, **kwargs)
     return wrapper
 
@@ -33,10 +30,7 @@ def require_stock_exists(func):
         )
         if stock_id is not None:
             if stock_model.get_stock_by_id(stock_id) is None:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Stock {stock_id} not found",
-                )
+                raise NotFoundError(f"Stock {stock_id} not found")
         return func(*args, **kwargs)
     return wrapper
 
@@ -51,9 +45,6 @@ def require_user_exists(func):
         )
         if user_id is not None:
             if user_model.get_user_by_id(user_id) is None:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"User {user_id} not found",
-                )
+                raise NotFoundError(f"User {user_id} not found")
         return func(*args, **kwargs)
     return wrapper
